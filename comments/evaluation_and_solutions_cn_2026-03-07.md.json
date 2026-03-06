@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "comments": [
+    {
+      "id": "7a494e21-bd42-4fd3-9634-269bc91d53d0",
+      "author": {
+        "login": "yihan",
+        "avatarUrl": ""
+      },
+      "anchor": {
+        "selectedText": "核心发现",
+        "prefix": "情、无条件积极关注、WAI咨访同盟）\n\n---\n\n## 一、现状评估：评分数据质量如何？\n\n### ",
+        "suffix": "：分数里大部分是\"噪声\"，不是\"信号\"\n\n通过多面Rasch模型（MFRM）的方差分解，我们发现评分",
+        "startOffset": 124,
+        "endOffset": 128,
+        "commitSha": "673cf7e2a0f44d972f8621c1e9f7b03076d5dffc"
+      },
+      "body": "Test comment from CLI",
+      "createdAt": "2026-03-06T18:31:15.056Z",
+      "resolved": false,
+      "replies": []
+    }
+  ],
+  "metadata": {
+    "repo": "agiforgood/rater-analysis",
+    "branch": "main",
+    "filePath": "evaluation_and_solutions_cn_2026-03-07.md",
+    "url": "https://md-comment.fly.dev/agiforgood/rater-analysis/blob/main/evaluation_and_solutions_cn_2026-03-07.md"
+  }
+}
