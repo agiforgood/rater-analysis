@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>异步任务体验 Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f6fa; color: #2d3436; display: flex; height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 280px; background: #fff; border-right: 1px solid #dfe6e9; padding: 20px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  .sidebar h3 { font-size: 14px; color: #636e72; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .task-list { display: flex; flex-direction: column; gap: 8px; }
+
+  /* Task Card */
+  .task-card { background: #f8f9fa; border: 1px solid #dfe6e9; border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s; }
+  .task-card:hover { border-color: #74b9ff; background: #f0f7ff; }
+  .task-card.active { border-color: #0984e3; background: #e8f4fd; }
+  .task-card .task-id { font-size: 12px; color: #636e72; font-family: monospace; }
+  .task-card .task-status { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; font-weight: 500; }
+  .task-card .task-progress { font-size: 12px; color: #636e72; margin-top: 4px; }
+
+  /* Status indicators */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.pending { background: #fdcb6e; }
+  .dot.running { background: #0984e3; animation: pulse 1s infinite; }
+  .dot.completed { background: #00b894; }
+  .dot.failed { background: #d63031; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Main content */
+  .main { flex: 1; padding: 32px; display: flex; flex-direction: column; gap: 24px; overflow-y: auto; }
+  .main h1 { font-size: 22px; font-weight: 600; }
+
+  /* Config panel */
+  .config-panel { background: #fff; border-radius: 10px; padding: 24px; border: 1px solid #dfe6e9; }
+  .config-panel h2 { font-size: 16px; margin-bottom: 16px; }
+  .form-row { display: flex; gap: 16px; margin-bottom: 12px; align-items: center; }
+  .form-row label { font-size: 13px; color: #636e72; width: 100px; flex-shrink: 0; }
+  .form-row select, .form-row input { flex: 1; padding: 8px 12px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 13px; }
+  .btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: #0984e3; color: #fff; }
+  .btn-primary:hover { background: #0873c4; }
+  .btn-primary:disabled { background: #b2bec3; cursor: not-allowed; }
+
+  /* Result viewer */
+  .result-panel { background: #fff; border-radius: 10px; padding: 24px; border: 1px solid #dfe6e9; display: none; }
+  .result-panel.show { display: block; }
+  .result-panel h2 { font-size: 16px; margin-bottom: 16px; }
+  .conversation { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .msg { padding: 10px 14px; border-radius: 10px; max-width: 80%; font-size: 13px; line-height: 1.5; }
+  .msg.coach { background: #dfe6e9; align-self: flex-start; }
+  .msg.parent { background: #74b9ff; color: #fff; align-self: flex-end; }
+  .eval-scores { display: flex; gap: 16px; }
+  .eval-card { flex: 1; background: #f8f9fa; border-radius: 8px; padding: 14px; text-align: center; }
+  .eval-card .dim { font-size: 12px; color: #636e72; margin-bottom: 4px; }
+  .eval-card .score { font-size: 28px; font-weight: 700; color: #0984e3; }
+
+  /* Toast */
+  .toast { position: fixed; top: 20px; right: 20px; background: #00b894; color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 10; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <h3>任务列表</h3>
+  <div class="task-list" id="taskList">
+    <div style="font-size:13px; color:#b2bec3; text-align:center; padding:20px 0;">暂无任务</div>
+  </div>
+</div>
+
+<div class="main">
+  <h1>智能体对话生成</h1>
+
+  <div class="config-panel">
+    <h2>生成配置</h2>
+    <div class="form-row">
+      <label>教练模型</label>
+      <select>
+        <option>Claude Opus 4.6</option>
+        <option>Claude Sonnet 4.6</option>
+        <option>GPT-4o</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>家长档案</label>
+      <select id="parentProfile">
+        <option>焦虑型家长</option>
+        <option>抗拒型家长</option>
+        <option>配合型家长</option>
+        <option value="custom">自定义提示词...</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>对话轮次</label>
+      <input type="number" id="turnCount" value="5" min="2" max="10" style="max-width:80px;">
+    </div>
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" id="generateBtn" onclick="startGeneration()">生成对话</button>
+    </div>
+  </div>
+
+  <div class="result-panel" id="resultPanel">
+    <h2 id="resultTitle">对话与评估结果</h2>
+    <div class="conversation" id="conversationView"></div>
+    <h2 style="margin-bottom:12px;">评估分数</h2>
+    <div class="eval-scores" id="evalScores"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const MOCK_CONVERSATIONS = [
+  [
+    { role: 'coach', text: '您好，感谢您今天来和我聊聊。能告诉我最近让您担心的事情吗？' },
+    { role: 'parent', text: '孩子最近总是不听话，我说什么都不管用，我真的很焦虑。' },
+    { role: 'coach', text: '我能感受到您的焦虑。当您说"不听话"的时候，能给我举一个具体的例子吗？' },
+    { role: 'parent', text: '比如让他写作业，他就一直拖，拖到很晚才开始，每天都这样。' },
+    { role: 'coach', text: '每天面对这样的情况确实很消耗精力。您觉得他拖延的时候，内心可能在经历什么？' },
+  ],
+  [
+    { role: 'coach', text: '今天想聊些什么呢？' },
+    { role: 'parent', text: '我不觉得咨询有什么用，是学校要求我来的。' },
+    { role: 'coach', text: '理解，被要求来确实不太舒服。不过既然来了，有没有什么是您自己想聊的？' },
+    { role: 'parent', text: '老师总说孩子有问题，但我觉得孩子挺好的。' },
+    { role: 'coach', text: '您很了解自己的孩子，这一点很重要。能说说您眼中孩子的优点吗？' },
+  ],
+];
+
+const STEPS = [
+  { label: '初始化会话...', duration: 800 },
+  { label: '第 1/5 轮对话...', duration: 1200 },
+  { label: '第 2/5 轮对话...', duration: 1000 },
+  { label: '第 3/5 轮对话...', duration: 1100 },
+  { label: '第 4/5 轮对话...', duration: 900 },
+  { label: '第 5/5 轮对话...', duration: 1000 },
+  { label: '评估 TES 共情量表...', duration: 1500 },
+  { label: '评估无条件积极关注...', duration: 1200 },
+  { label: '评估 WAI 工作联盟...', duration: 1300 },
+];
+
+let taskCounter = 0;
+const tasks = {};
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function startGeneration() {
+  taskCounter++;
+  const runId = 'run_' + String(taskCounter).padStart(3, '0');
+  const task = { id: runId, status: 'pending', progress: '', step: 0 };
+  tasks[runId] = task;
+
+  renderTaskList();
+  showToast(`任务 ${runId} 已创建`);
+
+  // Simulate async progression
+  setTimeout(() => {
+    task.status = 'running';
+    simulateStep(runId, 0);
+  }, 500);
+}
+
+function simulateStep(runId, stepIdx) {
+  const task = tasks[runId];
+  if (!task || stepIdx >= STEPS.length) {
+    task.status = 'completed';
+    task.progress = '完成 ✓';
+    task.conversation = MOCK_CONVERSATIONS[taskCounter % MOCK_CONVERSATIONS.length];
+    task.scores = {
+      TES: (3 + Math.random() * 1.5).toFixed(1),
+      UPR: (3.2 + Math.random() * 1.3).toFixed(1),
+      WAI: (3.5 + Math.random() * 1.2).toFixed(1),
+    };
+    renderTaskList();
+    showToast(`任务 ${runId} 已完成`);
+    return;
+  }
+  task.step = stepIdx;
+  task.progress = STEPS[stepIdx].label;
+  renderTaskList();
+  setTimeout(() => simulateStep(runId, stepIdx + 1), STEPS[stepIdx].duration);
+}
+
+function renderTaskList() {
+  const list = document.getElementById('taskList');
+  const ids = Object.keys(tasks).reverse();
+  if (ids.length === 0) {
+    list.innerHTML = '<div style="font-size:13px;color:#b2bec3;text-align:center;padding:20px 0;">暂无任务</div>';
+    return;
+  }
+  list.innerHTML = ids.map(id => {
+    const t = tasks[id];
+    return `
+      <div class="task-card" onclick="selectTask('${id}')">
+        <div class="task-id">${id}</div>
+        <div class="task-status">
+          <span class="dot ${t.status}"></span>
+          ${t.status === 'pending' ? '等待中' : t.status === 'running' ? '运行中' : t.status === 'completed' ? '已完成' : '失败'}
+        </div>
+        <div class="task-progress">${t.progress || ''}</div>
+      </div>`;
+  }).join('');
+}
+
+function selectTask(id) {
+  const task = tasks[id];
+  const panel = document.getElementById('resultPanel');
+  if (task.status !== 'completed') {
+    panel.classList.remove('show');
+    return;
+  }
+  panel.classList.add('show');
+  document.getElementById('resultTitle').textContent = `${id} — 对话与评估结果`;
+
+  const cv = document.getElementById('conversationView');
+  cv.innerHTML = task.conversation.map(m =>
+    `<div class="msg ${m.role}">${m.text}</div>`
+  ).join('');
+
+  const es = document.getElementById('evalScores');
+  es.innerHTML = Object.entries(task.scores).map(([dim, score]) =>
+    `<div class="eval-card"><div class="dim">${dim}</div><div class="score">${score}</div></div>`
+  ).join('');
+}
+</script>
+</body>
+</html>
